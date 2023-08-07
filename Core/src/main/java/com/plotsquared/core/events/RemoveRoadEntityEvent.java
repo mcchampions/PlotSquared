@@ -16,19 +16,35 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.plotsquared.core.util;
+package com.plotsquared.core.events;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.regex.Pattern;
+import com.sk89q.worldedit.entity.Entity;
 
-@Deprecated(since = "6.6.2", forRemoval = true)
-public class RegExUtil {
+/**
+ * @since 6.11.0
+ */
+public class RemoveRoadEntityEvent extends EntityEvent implements CancellablePlotEvent {
 
-    public static Map<String, Pattern> compiledPatterns;
+    private Result eventResult;
 
-    static {
-        compiledPatterns = new HashMap<>();
+    /**
+     * RemoveRoadEntityEvent: Called when an entity on road is removed.
+     *
+     * @param entity The entity to remove
+     * @since 6.11.0
+     */
+    public RemoveRoadEntityEvent(Entity entity) {
+        super(entity);
+    }
+
+    @Override
+    public Result getEventResult() {
+        return this.eventResult;
+    }
+
+    @Override
+    public void setEventResult(Result eventResult) {
+        this.eventResult = eventResult;
     }
 
 }
