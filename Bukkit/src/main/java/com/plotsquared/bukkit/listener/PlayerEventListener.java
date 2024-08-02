@@ -50,6 +50,7 @@ import com.plotsquared.core.plot.flag.implementations.DenyPortalsFlag;
 import com.plotsquared.core.plot.flag.implementations.DenyTeleportFlag;
 import com.plotsquared.core.plot.flag.implementations.DoneFlag;
 import com.plotsquared.core.plot.flag.implementations.DropProtectionFlag;
+import com.plotsquared.core.plot.flag.implementations.EditSignFlag;
 import com.plotsquared.core.plot.flag.implementations.HangingBreakFlag;
 import com.plotsquared.core.plot.flag.implementations.HangingPlaceFlag;
 import com.plotsquared.core.plot.flag.implementations.HostileInteractFlag;
@@ -60,6 +61,7 @@ import com.plotsquared.core.plot.flag.implementations.MiscInteractFlag;
 import com.plotsquared.core.plot.flag.implementations.PlayerInteractFlag;
 import com.plotsquared.core.plot.flag.implementations.PreventCreativeCopyFlag;
 import com.plotsquared.core.plot.flag.implementations.TamedInteractFlag;
+import com.plotsquared.core.plot.flag.implementations.TileDropFlag;
 import com.plotsquared.core.plot.flag.implementations.UntrustedVisitFlag;
 import com.plotsquared.core.plot.flag.implementations.VehicleBreakFlag;
 import com.plotsquared.core.plot.flag.implementations.VehicleUseFlag;
@@ -87,6 +89,7 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Sign;
 import org.bukkit.block.data.Waterlogged;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.ArmorStand;
@@ -105,6 +108,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
@@ -175,6 +179,33 @@ public class PlayerEventListener implements Listener {
             Material.WRITABLE_BOOK,
             Material.WRITTEN_BOOK
     );
+    private static final Set<String> DYES;
+    static {
+        Set<String> mutableDyes = new HashSet<>(Set.of(
+                "WHITE_DYE",
+                "LIGHT_GRAY_DYE",
+                "GRAY_DYE",
+                "BLACK_DYE",
+                "BROWN_DYE",
+                "RED_DYE",
+                "ORANGE_DYE",
+                "YELLOW_DYE",
+                "LIME_DYE",
+                "GREEN_DYE",
+                "CYAN_DYE",
+                "LIGHT_BLUE_DYE",
+                "BLUE_DYE",
+                "PURPLE_DYE",
+                "MAGENTA_DYE",
+                "PINK_DYE",
+                "GLOW_INK_SAC"
+        ));
+        int[] version = PlotSquared.platform().serverVersion();
+        if (version[1] >= 20 && version[2] >= 1) {
+            mutableDyes.add("HONEYCOMB");
+        }
+        DYES = Set.copyOf(mutableDyes);
+    }
     private final EventDispatcher eventDispatcher;
     private final WorldEdit worldEdit;
     private final PlotAreaManager plotAreaManager;
@@ -205,6 +236,53 @@ public class PlayerEventListener implements Listener {
         this.worldEdit = worldEdit;
         this.plotAreaManager = plotAreaManager;
         this.plotListener = plotListener;
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
+    public void onBlockBreak(final BlockBreakEvent event) {
+        Location location = BukkitUtil.adapt(event.getBlock().getLocation());
+        PlotArea area = location.getPlotArea();
+        if (area == null) {
+            return;
+        }
+        Plot plot = area.getPlot(location);
+        if (plot != null) {
+            event.setDropItems(plot.getFlag(TileDropFlag.class));
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerDyeSign(PlayerInteractEvent event) {
+        ItemStack itemStack = event.getItem();
+        if (itemStack == null) {
+            return;
+        }
+        Block block = event.getClickedBlock();
+        if (block != null && block.getState() instanceof Sign) {
+            if (DYES.contains(itemStack.getType().toString())) {
+                Location location = BukkitUtil.adapt(block.getLocation());
+                PlotArea area = location.getPlotArea();
+                if (area == null) {
+                    return;
+                }
+                Plot plot = location.getOwnedPlot();
+                if (plot == null) {
+                    if (PlotFlagUtil.isAreaRoadFlagsAndFlagEquals(area, EditSignFlag.class, false)
+                            && !event.getPlayer().hasPermission(Permission.PERMISSION_ADMIN_INTERACT_ROAD.toString())) {
+                        event.setCancelled(true);
+                    }
+                    return;
+                }
+                if (plot.isAdded(event.getPlayer().getUniqueId())) {
+                    return; // allow for added players
+                }
+                if (!plot.getFlag(EditSignFlag.class)
+                        && !event.getPlayer().hasPermission(Permission.PERMISSION_ADMIN_INTERACT_OTHER.toString())) {
+                    plot.debug(event.getPlayer().getName() + " could not color the sign because of edit-sign = false");
+                    event.setCancelled(true);
+                }
+            }
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -369,6 +447,7 @@ public class PlayerEventListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    @SuppressWarnings("deprecation") // Paper deprecation
     public void onConnect(PlayerJoinEvent event) {
         final Player player = event.getPlayer();
         PlotSquared.platform().playerManager().removePlayer(player.getUniqueId());
@@ -454,9 +533,9 @@ public class PlayerEventListener implements Listener {
                     // to is identical to the plot's home location, and untrusted-visit is true
                     // i.e. untrusted-visit can override deny-teleport
                     // this is acceptable, because otherwise it wouldn't make sense to have both flags set
-                    if (!result && !(plot.getFlag(UntrustedVisitFlag.class) && plot
-                            .getHomeSynchronous()
-                            .equals(BukkitUtil.adaptComplete(to)))) {
+                    if (result || (plot.getFlag(UntrustedVisitFlag.class) && plot.getHomeSynchronous().equals(BukkitUtil.adaptComplete(to)))) {
+                        plotListener.plotEntry(pp, plot);
+                    } else {
                         pp.sendMessage(
                                 TranslatableCaption.of("deny.no_enter"),
                                 TagResolver.resolver("plot", Tag.inserting(Component.text(plot.toString())))
@@ -467,6 +546,19 @@ public class PlayerEventListener implements Listener {
             }
         }
         playerMove(event);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onWorldChanged(PlayerChangedWorldEvent event) {
+        Player player = event.getPlayer();
+        BukkitPlayer pp = BukkitUtil.adapt(player);
+        if (this.worldEdit != null) {
+            if (!pp.hasPermission(Permission.PERMISSION_WORLDEDIT_BYPASS)) {
+                if (pp.getAttribute("worldedit")) {
+                    pp.removeAttribute("worldedit");
+                }
+            }
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -607,7 +699,7 @@ public class PlayerEventListener implements Listener {
                 this.tmpTeleport = true;
                 return;
             }
-            int border = area.getBorder();
+            int border = area.getBorder(true);
             int x1;
             if (x2 > border && this.tmpTeleport) {
                 if (!pp.hasPermission(Permission.PERMISSION_ADMIN_BYPASS_BORDER)) {
@@ -702,7 +794,7 @@ public class PlayerEventListener implements Listener {
                 this.tmpTeleport = true;
                 return;
             }
-            int border = area.getBorder();
+            int border = area.getBorder(true);
             int z1;
             if (z2 > border && this.tmpTeleport) {
                 if (!pp.hasPermission(Permission.PERMISSION_ADMIN_BYPASS_BORDER)) {
@@ -733,6 +825,7 @@ public class PlayerEventListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.LOW)
+    @SuppressWarnings("deprecation") // Paper deprecation
     public void onChat(AsyncPlayerChatEvent event) {
         if (event.isCancelled()) {
             return;
@@ -804,40 +897,6 @@ public class PlayerEventListener implements Listener {
                     spymsg,
                     builder.tag("message", Tag.inserting(Component.text(message))).build()
             );
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onWorldChanged(PlayerChangedWorldEvent event) {
-        Player player = event.getPlayer();
-        BukkitPlayer pp = BukkitUtil.adapt(player);
-        // Delete last location
-        Plot plot;
-        try (final MetaDataAccess<Plot> lastPlotAccess =
-                     pp.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LAST_PLOT)) {
-            plot = lastPlotAccess.remove();
-        }
-        try (final MetaDataAccess<Location> lastLocationAccess =
-                     pp.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LOCATION)) {
-            lastLocationAccess.remove();
-        }
-        if (plot != null) {
-            plotListener.plotExit(pp, plot);
-        }
-        if (this.worldEdit != null) {
-            if (!pp.hasPermission(Permission.PERMISSION_WORLDEDIT_BYPASS)) {
-                if (pp.getAttribute("worldedit")) {
-                    pp.removeAttribute("worldedit");
-                }
-            }
-        }
-        Location location = pp.getLocation();
-        PlotArea area = location.getPlotArea();
-        if (location.isPlotArea()) {
-            plot = location.getPlot();
-            if (plot != null) {
-                plotListener.plotEntry(pp, plot);
-            }
         }
     }
 
@@ -1063,6 +1122,7 @@ public class PlayerEventListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.LOW)
+    @SuppressWarnings("deprecation") // Paper deprecation
     public void onCancelledInteract(PlayerInteractEvent event) {
         if (event.isCancelled() && event.getAction() == Action.RIGHT_CLICK_AIR) {
             Player player = event.getPlayer();
@@ -1855,7 +1915,9 @@ public class PlayerEventListener implements Listener {
 
     @EventHandler
     public void onPlayerTakeLecternBook(PlayerTakeLecternBookEvent event) {
-        Location location = BukkitUtil.adapt(event.getPlayer().getLocation());
+        Player player = event.getPlayer();
+        BukkitPlayer pp = BukkitUtil.adapt(player);
+        Location location = pp.getLocation();
         PlotArea area = location.getPlotArea();
         if (area == null) {
             return;
@@ -1867,9 +1929,11 @@ public class PlayerEventListener implements Listener {
             }
             return;
         }
-        if (plot.getFlag(LecternReadBookFlag.class)) {
-            plot.debug(event.getPlayer().getName() + " could not take the book because of lectern-read-book = true");
-            event.setCancelled(true);
+        if (!plot.isAdded(pp.getUUID())) {
+            if (plot.getFlag(LecternReadBookFlag.class)) {
+                plot.debug(event.getPlayer().getName() + " could not take the book because of lectern-read-book = true");
+                event.setCancelled(true);
+            }
         }
     }
 

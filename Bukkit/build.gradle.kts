@@ -21,20 +21,20 @@ dependencies {
     api(projects.plotsquaredCore)
 
     // Metrics
-    implementation("org.bstats:bstats-bukkit")
+    implementation(libs.bstatsBukkit)
 
     // Paper
-    compileOnly("io.papermc.paper:paper-api")
-    implementation("io.papermc:paperlib")
+    compileOnly(libs.paper)
+    implementation(libs.paperlib)
 
     // Plugins
     compileOnly(libs.worldeditBukkit) {
         exclude(group = "org.bukkit")
         exclude(group = "org.spigotmc")
     }
-    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit") { isTransitive = false }
-    testImplementation("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit") { isTransitive = false }
-    compileOnly("com.github.MilkBowl:VaultAPI") {
+    compileOnly(libs.faweBukkit) { isTransitive = false }
+    testImplementation(libs.faweBukkit) { isTransitive = false }
+    compileOnly(libs.vault) {
         exclude(group = "org.bukkit")
     }
     compileOnly(libs.placeholderapi)
@@ -44,15 +44,15 @@ dependencies {
 
     // Other libraries
     implementation(libs.squirrelid) { isTransitive = false }
-    implementation("dev.notmyfault.serverlib:ServerLib")
+    implementation(libs.serverlib)
 
     // Our libraries
     implementation(libs.arkitektonika)
-    implementation("com.intellectualsites.paster:Paster")
-    implementation("com.intellectualsites.informative-annotations:informative-annotations")
+    implementation(libs.paster)
+    implementation(libs.informativeAnnotations)
 
     // Adventure
-    implementation("net.kyori:adventure-platform-bukkit")
+    implementation(libs.adventureBukkit)
 }
 
 tasks.processResources {
@@ -67,6 +67,7 @@ tasks.named<ShadowJar>("shadowJar") {
         exclude(dependency("org.checkerframework:"))
     }
 
+    relocate("net.kyori.option", "com.plotsquared.core.configuration.option")
     relocate("net.kyori.adventure", "com.plotsquared.core.configuration.adventure")
     relocate("net.kyori.examination", "com.plotsquared.core.configuration.examination")
     relocate("io.papermc.lib", "com.plotsquared.bukkit.paperlib")
@@ -100,17 +101,18 @@ tasks {
     withType<Javadoc> {
         val isRelease = if (rootProject.version.toString().endsWith("-SNAPSHOT")) "TODO" else rootProject.version.toString()
         val opt = options as StandardJavadocDocletOptions
-        opt.links("https://jd.papermc.io/paper/1.19/")
+        opt.links("https://jd.papermc.io/paper/1.20/")
         opt.links("https://docs.enginehub.org/javadoc/com.sk89q.worldedit/worldedit-bukkit/" + libs.worldeditBukkit.get().versionConstraint.toString())
         opt.links("https://intellectualsites.github.io/plotsquared-javadocs/core/")
         opt.links("https://jd.advntr.dev/api/4.14.0/")
         opt.links("https://google.github.io/guice/api-docs/" + libs.guice.get().versionConstraint.toString() + "/javadoc/")
-        opt.links("https://checkerframework.org/api/")
+    //    opt.links("https://checkerframework.org/api/")
         opt.isLinkSource = true
         opt.bottom(File("$rootDir/javadocfooter.html").readText())
         opt.isUse = true
         opt.encoding("UTF-8")
         opt.keyWords()
         opt.addStringOption("-since", isRelease)
+        opt.noTimestamp()
     }
 }

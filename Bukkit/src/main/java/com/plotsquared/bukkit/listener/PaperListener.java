@@ -19,6 +19,7 @@
 package com.plotsquared.bukkit.listener;
 
 import com.destroystokyo.paper.event.block.BeaconEffectEvent;
+import com.destroystokyo.paper.event.block.BlockDestroyEvent;
 import com.destroystokyo.paper.event.entity.EntityPathfindEvent;
 import com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent;
 import com.destroystokyo.paper.event.entity.PreCreatureSpawnEvent;
@@ -40,7 +41,9 @@ import com.plotsquared.core.plot.PlotArea;
 import com.plotsquared.core.plot.flag.FlagContainer;
 import com.plotsquared.core.plot.flag.implementations.BeaconEffectsFlag;
 import com.plotsquared.core.plot.flag.implementations.DoneFlag;
+import com.plotsquared.core.plot.flag.implementations.FishingFlag;
 import com.plotsquared.core.plot.flag.implementations.ProjectilesFlag;
+import com.plotsquared.core.plot.flag.implementations.TileDropFlag;
 import com.plotsquared.core.plot.flag.types.BooleanFlag;
 import com.plotsquared.core.plot.world.PlotAreaManager;
 import com.plotsquared.core.util.PlotFlagUtil;
@@ -81,6 +84,19 @@ public class PaperListener implements Listener {
     @Inject
     public PaperListener(final @NonNull PlotAreaManager plotAreaManager) {
         this.plotAreaManager = plotAreaManager;
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
+    public void onBlockDestroy(final BlockDestroyEvent event) {
+        Location location = BukkitUtil.adapt(event.getBlock().getLocation());
+        PlotArea area = location.getPlotArea();
+        if (area == null) {
+            return;
+        }
+        Plot plot = area.getPlot(location);
+        if (plot != null) {
+            event.setWillDrop(plot.getFlag(TileDropFlag.class));
+        }
     }
 
     @EventHandler
@@ -124,7 +140,7 @@ public class PaperListener implements Listener {
         }
         Slime slime = event.getEntity();
 
-        Block b = slime.getTargetBlock(4);
+        Block b = slime.getTargetBlockExact(4);
         if (b == null) {
             return;
         }
@@ -166,12 +182,16 @@ public class PaperListener implements Listener {
         }
         Location location = BukkitUtil.adapt(event.getSpawnLocation());
         PlotArea area = location.getPlotArea();
-        if (!location.isPlotArea()) {
+        if (area == null) {
             return;
         }
-        //If entities are spawning... the chunk should be loaded?
+        // Armour-stands are handled elsewhere and should not be handled by area-wide entity-spawn options
+        if (event.getType() == EntityType.ARMOR_STAND) {
+            return;
+        }
+        // If entities are spawning... the chunk should be loaded?
         Entity[] entities = event.getSpawnLocation().getChunk().getEntities();
-        if (entities.length > Settings.Chunk_Processor.MAX_ENTITIES) {
+        if (entities.length >= Settings.Chunk_Processor.MAX_ENTITIES) {
             event.setShouldAbortSpawn(true);
             event.setCancelled(true);
             return;
@@ -200,7 +220,7 @@ public class PaperListener implements Listener {
                 }
             }
             case "BUILD_IRONGOLEM", "BUILD_SNOWMAN", "BUILD_WITHER", "CUSTOM" -> {
-                if (!area.isSpawnCustom() && event.getType() != EntityType.ARMOR_STAND) {
+                if (!area.isSpawnCustom()) {
                     event.setShouldAbortSpawn(true);
                     event.setCancelled(true);
                     return;
@@ -344,6 +364,11 @@ public class PaperListener implements Listener {
                 event.setCancelled(true);
             }
         } else if (!plot.isAdded(pp.getUUID())) {
+            if (entity.getType().equals(EntityType.FISHING_HOOK)) {
+                if (plot.getFlag(FishingFlag.class)) {
+                    return;
+                }
+            }
             if (!plot.getFlag(ProjectilesFlag.class)) {
                 if (!pp.hasPermission(Permission.PERMISSION_ADMIN_PROJECTILE_OTHER)) {
                     pp.sendMessage(

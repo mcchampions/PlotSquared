@@ -186,14 +186,14 @@ public class Claim extends SubCommand {
                 player.sendMessage(
                         TranslatableCaption.of("economy.removed_granted_plot"),
                         TagResolver.builder()
-                                .tag("usedGrants", Tag.inserting(Component.text(grants - 1)))
-                                .tag("remainingGrants", Tag.inserting(Component.text(grants)))
+                                .tag("used_grants", Tag.inserting(Component.text(grants - 1)))
+                                .tag("remaining_grants", Tag.inserting(Component.text(grants)))
                                 .build()
                 );
             }
         }
         if (!player.hasPermission(Permission.PERMISSION_ADMIN_BYPASS_BORDER)) {
-            int border = area.getBorder();
+            int border = area.getBorder(false);
             if (border != Integer.MAX_VALUE && plot.getDistanceFromOrigin() > border && !force) {
                 player.sendMessage(TranslatableCaption.of("border.denied"));
                 return false;
