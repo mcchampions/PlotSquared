@@ -1,6 +1,2 @@
-before_install:
-  - sdk install java 12-zulu
-  - sdk use java 12-zulu
-
 jdk:
-  - openjdk12
+  - openjdk21
