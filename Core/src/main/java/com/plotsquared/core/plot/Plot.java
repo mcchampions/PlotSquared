@@ -1407,6 +1407,9 @@ public class Plot {
                 );
             }
             Location location = toHomeLocation(bottom, home);
+            if (Settings.Teleport.SIZED_BASED && this.worldUtil.isSmallBlock(location) && this.worldUtil.isSmallBlock(location.add(0,1,0))) {
+                return location;
+            }
             if (!this.worldUtil.getBlockSynchronous(location).getBlockType().getMaterial().isAir()) {
                 location = location.withY(
                         Math.max(1 + this.worldUtil.getHighestBlockSynchronous(
@@ -1440,15 +1443,21 @@ public class Plot {
             }
             Location bottom = this.getBottomAbs();
             Location location = toHomeLocation(bottom, home);
-            this.worldUtil.getBlock(location, block -> {
-                if (!block.getBlockType().getMaterial().isAir()) {
-                    this.worldUtil.getHighestBlock(this.getWorldName(), location.getX(), location.getZ(),
-                            y -> result.accept(location.withY(Math.max(1 + y, bottom.getY())))
-                    );
-                } else {
-                    result.accept(location);
-                }
-            });
+            if (Settings.Teleport.SIZED_BASED && this.worldUtil.isSmallBlock(location) && this.worldUtil.isSmallBlock(location.add(0,1,0))) {
+                result.accept(location);
+            } else {
+                this.worldUtil.getBlock(location, block -> {
+
+                    if (!block.getBlockType().getMaterial().isAir()) {
+                        this.worldUtil.getHighestBlock(this.getWorldName(), location.getX(), location.getZ(),
+                                y -> result.accept(location.withY(Math.max(1 + y, bottom.getY())))
+                        );
+                    } else {
+                        result.accept(location);
+                    }
+                });
+            }
+
         }
     }
 
@@ -1708,6 +1717,7 @@ public class Plot {
         }
         player.sendMessage(
                 TranslatableCaption.of("working.claimed"),
+                TagResolver.resolver("world", Tag.inserting(Component.text(this.getWorldName()))),
                 TagResolver.resolver("plot", Tag.inserting(Component.text(this.getId().toString())))
         );
         if (teleport) {
@@ -2182,6 +2192,9 @@ public class Plot {
      * @return if the given player can claim the plot
      */
     public boolean canClaim(@NonNull PlotPlayer<?> player) {
+        if (!WorldUtil.isValidLocation(getBottomAbs())) {
+            return false;
+        }
         PlotCluster cluster = this.getCluster();
         if (cluster != null) {
             if (!cluster.isAdded(player.getUUID()) && !player.hasPermission("plots.admin.command.claim")) {
