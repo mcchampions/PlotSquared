@@ -40,4 +40,4 @@ jobs:
         name: Upload Beta artifact
         with:
           name: Build
-          path: Bukkit/target
+          path: ./
