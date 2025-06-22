@@ -6,7 +6,6 @@ on:
       - v6
 jobs:
   build:
-    if: github.repository_owner == 'IntellectualSites'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
