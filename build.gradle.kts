@@ -58,7 +58,6 @@ subprojects {
     apply {
         plugin<JavaPlugin>()
         plugin<JavaLibraryPlugin>()
-        plugin<com.vanniktech.maven.publish.MavenPublishPlugin>()
         plugin<ShadowPlugin>()
         plugin<SpotlessPlugin>()
         plugin<SigningPlugin>()
@@ -112,70 +111,6 @@ subprojects {
         }
     }
 
-    mavenPublishing {
-        coordinates(
-            groupId = "$group",
-            artifactId = project.name,
-            version = "${project.version}",
-        )
-
-        pom {
-            name.set(project.name)
-            description.set("PlotSquared, a land and world management plugin for Minecraft.")
-            url.set("https://github.com/IntellectualSites/PlotSquared")
-
-            licenses {
-                license {
-                    name.set("GNU General Public License, Version 3.0")
-                    url.set("https://www.gnu.org/licenses/gpl-3.0.html")
-                    distribution.set("repo")
-                }
-            }
-
-            developers {
-                developer {
-                    id.set("Sauilitired")
-                    name.set("Alexander Söderberg")
-                    organization.set("IntellectualSites")
-                    organizationUrl.set("https://github.com/IntellectualSites")
-                }
-                developer {
-                    id.set("NotMyFault")
-                    name.set("Alexander Brandes")
-                    organization.set("IntellectualSites")
-                    organizationUrl.set("https://github.com/IntellectualSites")
-                    email.set("contact(at)notmyfault.dev")
-                }
-                developer {
-                    id.set("SirYwell")
-                    name.set("Hannes Greule")
-                    organization.set("IntellectualSites")
-                    organizationUrl.set("https://github.com/IntellectualSites")
-                }
-                developer {
-                    id.set("dordsor21")
-                    name.set("dordsor21")
-                    organization.set("IntellectualSites")
-                    organizationUrl.set("https://github.com/IntellectualSites")
-                }
-            }
-
-            scm {
-                url.set("https://github.com/IntellectualSites/PlotSquared")
-                connection.set("scm:git:https://github.com/IntellectualSites/PlotSquared.git")
-                developerConnection.set("scm:git:git@github.com:IntellectualSites/PlotSquared.git")
-                tag.set("${project.version}")
-            }
-
-            issueManagement {
-                system.set("GitHub")
-                url.set("https://github.com/IntellectualSites/PlotSquared/issues")
-            }
-
-            publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
-        }
-    }
-
     tasks {
 
         compileJava {
@@ -191,9 +126,6 @@ subprojects {
         named("build") {
             dependsOn(named("shadowJar"))
         }
-        test {
-            useJUnitPlatform()
-        }
 
         withType<AbstractArchiveTask>().configureEach {
             isPreserveFileTimestamps = false
@@ -204,32 +136,4 @@ subprojects {
 
 tasks.getByName<Jar>("jar") {
     enabled = false
-}
-
-val supportedVersions = listOf("1.19.4", "1.20.6", "1.21.1", "1.21.3", "1.21.4", "1.21.5")
-tasks {
-    register("cacheLatestFaweArtifact") {
-        val lastSuccessfulBuildUrl = uri("https://ci.athion.net/job/FastAsyncWorldEdit/lastSuccessfulBuild/api/json").toURL()
-        val artifact = ((JsonSlurper().parse(lastSuccessfulBuildUrl) as Map<*, *>)["artifacts"] as List<*>)
-                .map { it as Map<*, *> }
-                .map { it["fileName"] as String }
-                .first { it -> it.contains("Paper") }
-        project.ext["faweArtifact"] = artifact
-    }
-
-    supportedVersions.forEach {
-        register<RunServer>("runServer-$it") {
-            dependsOn(getByName("cacheLatestFaweArtifact"))
-            minecraftVersion(it)
-            pluginJars(*project(":plotsquared-bukkit").getTasksByName("shadowJar", false)
-                    .map { task -> (task as Jar).archiveFile }
-                    .toTypedArray())
-            jvmArgs("-DPaper.IgnoreJavaVersion=true", "-Dcom.mojang.eula.agree=true")
-            downloadPlugins {
-                url("https://ci.athion.net/job/FastAsyncWorldEdit/lastSuccessfulBuild/artifact/artifacts/${project.ext["faweArtifact"]}")
-            }
-            group = "run paper"
-            runDirectory.set(file("run-$it"))
-        }
-    }
 }
